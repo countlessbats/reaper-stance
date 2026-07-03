@@ -47,10 +47,44 @@ function Find-GameDir {
     return $null
 }
 
-if (-not $GameDir) { $GameDir = Find-GameDir }
-if (-not $GameDir) {
-    throw "Could not auto-detect the game. Pass -GameDir '<path to Pillars of Eternity>'."
+function Test-GameDir([string]$dir) {
+    return $dir -and (Test-Path (Join-Path $dir 'PillarsOfEternity_Data\Managed\Assembly-CSharp.dll'))
 }
+
+# Be forgiving if the user points a bit too deep (e.g. at PillarsOfEternity_Data or Managed):
+# walk up until we reach the folder that actually contains the game assembly.
+function Resolve-GameDir([string]$dir) {
+    $try = $dir
+    while ($try -and -not (Test-GameDir $try)) {
+        $parent = Split-Path $try -Parent
+        if ([string]::IsNullOrEmpty($parent) -or $parent -eq $try) { break }
+        $try = $parent
+    }
+    if (Test-GameDir $try) { return $try }
+    return $dir
+}
+
+# Resolve the game directory: explicit -GameDir, then auto-detect, then prompt the user.
+if ($GameDir) { $GameDir = Resolve-GameDir ($GameDir.Trim().Trim('"')) }
+if (-not (Test-GameDir $GameDir)) {
+    $auto = Find-GameDir
+    if (Test-GameDir $auto) { $GameDir = $auto }
+}
+if (-not (Test-GameDir $GameDir)) {
+    Write-Host "Could not find your Pillars of Eternity installation automatically." -ForegroundColor Yellow
+    Write-Host "It's the folder that contains 'PillarsOfEternity_Data'" -ForegroundColor DarkGray
+    Write-Host "(for example: ...\steamapps\common\Pillars of Eternity)." -ForegroundColor DarkGray
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        $entry = Read-Host "Enter the path to your Pillars of Eternity folder (leave blank to cancel)"
+        if ([string]::IsNullOrWhiteSpace($entry)) { throw "Installation cancelled." }
+        $candidate = Resolve-GameDir ($entry.Trim().Trim('"'))
+        if (Test-GameDir $candidate) { $GameDir = $candidate; break }
+        Write-Host "That folder doesn't contain PillarsOfEternity_Data\Managed\Assembly-CSharp.dll. Try again." -ForegroundColor Yellow
+    }
+    if (-not (Test-GameDir $GameDir)) { throw "Could not locate the game after several attempts." }
+}
+
+Write-Host "Game folder: $GameDir" -ForegroundColor DarkGray
 
 $managed  = Join-Path $GameDir 'PillarsOfEternity_Data\Managed'
 $asmPath  = Join-Path $managed 'Assembly-CSharp.dll'
