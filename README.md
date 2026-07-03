@@ -47,56 +47,55 @@ game's `Assembly-CSharp.dll`.
 
 ## Installation
 
-You need:
+Requires Pillars of Eternity 1 with **The White March Part II**.
 
-- Pillars of Eternity 1 with **The White March Part II**.
-- The .NET Roslyn C# compiler (`csc.exe`, ships with Visual Studio / Build Tools) to build
-  the sidecar.
-- The .NET SDK (`dotnet`) to build the one-time patcher.
+### Option A — Quick install (no compiling) — recommended
 
-### 1. Build the sidecar
+1. Download **`ReaperStance-v1.0.0.zip`** from the
+   [Releases](https://github.com/countlessbats/reaper-stance/releases) page and extract it.
+2. **Close the game.**
+3. From the extracted folder, run PowerShell:
 
-From a shell, with `GAME` set to your install directory
-(e.g. `E:\SteamLibrary\steamapps\common\Pillars of Eternity`):
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\install.ps1 -GameDir "E:\SteamLibrary\steamapps\common\Pillars of Eternity"
+   ```
+
+   You can omit `-GameDir` to let it auto-detect a Steam install.
+
+That's it — no compiler, no .NET SDK, no runtime install. The bundled `install.ps1`:
+copies the prebuilt sidecar into the game, backs up `Assembly-CSharp.dll` once, and
+injects the hook using the bundled (MIT-licensed) `Mono.Cecil.dll`. It's safe to re-run
+(it detects an already-patched assembly and does nothing).
+
+4. Launch the game, put a Cipher in the party, and look for the **Reaping Knives** modal on
+   the action bar — it defaults to on.
+
+### Option B — Build from source (developers)
+
+Needs the Roslyn C# compiler (`csc.exe`, from Visual Studio / Build Tools) and the .NET SDK
+(`dotnet`).
 
 ```powershell
-# PowerShell
+# 1. Build + install the sidecar
 ./build.ps1 -GameDir "E:\SteamLibrary\steamapps\common\Pillars of Eternity"
-```
 
-`build.ps1` compiles `src/ReaperStance.cs` into
-`PillarsOfEternity_Data/Managed/LoomReapingKnivesModal.dll`.
-
-### 2. Patch the game assembly (one time)
-
-```powershell
+# 2. Inject the hook (one time). Back up Assembly-CSharp.dll first.
 cd patcher
 dotnet run -- "<GAME>\PillarsOfEternity_Data\Managed\Assembly-CSharp.dll" `
              "<GAME>\PillarsOfEternity_Data\Managed\LoomReapingKnivesModal.dll"
 ```
 
-The patcher **backs up nothing automatically** — make a copy of `Assembly-CSharp.dll`
-first (see below). It injects a single call to `LoomReapingKnivesModal.Bootstrap.Tick()`
-at the top of `GameState.Update()`, and is idempotent (it refuses to patch twice).
-
-### 3. Play
-
-Launch the game, put a Cipher in the party, and look for the **Reaping Knives** modal on
-the action bar — it defaults to on.
+The patcher injects a single call to `LoomReapingKnivesModal.Bootstrap.Tick()` at the top
+of `GameState.Update()` and is idempotent (it refuses to patch twice).
 
 ---
 
 ## Backups & uninstalling
 
-Before patching, copy your game assembly somewhere safe:
+`install.ps1` automatically saves your original assembly to
+`Assembly-CSharp.dll.reaperstance-backup` (once). To uninstall:
 
-```
-PillarsOfEternity_Data/Managed/Assembly-CSharp.dll  ->  Assembly-CSharp.dll.backup
-```
-
-To uninstall:
-
-1. Restore `Assembly-CSharp.dll` from your backup.
+1. Restore `Assembly-CSharp.dll` from `Assembly-CSharp.dll.reaperstance-backup`.
 2. Delete `PillarsOfEternity_Data/Managed/LoomReapingKnivesModal.dll`.
 
 Verifying game files through Steam will also restore the original `Assembly-CSharp.dll`
