@@ -54,18 +54,21 @@ Requires Pillars of Eternity 1 with **The White March Part II**.
 1. Download **`ReaperStance-v1.0.0.zip`** from the
    [Releases](https://github.com/countlessbats/reaper-stance/releases) page and extract it.
 2. **Close the game.**
-3. From the extracted folder, run PowerShell:
+3. **Double-click `install.bat`** and approve the administrator prompt.
 
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File .\install.ps1 -GameDir "E:\SteamLibrary\steamapps\common\Pillars of Eternity"
-   ```
+That's it — no compiler, no .NET SDK, no runtime install, no typing. `install.bat` just runs
+the bundled `install.ps1`, which copies the prebuilt sidecar into the game, backs up
+`Assembly-CSharp.dll` once, and injects the hook using the bundled (MIT-licensed)
+`Mono.Cecil.dll`. It's safe to re-run (it detects an already-patched assembly and does
+nothing). It auto-detects a Steam install; if your game is elsewhere, run it from a command
+prompt with a path instead:
 
-   You can omit `-GameDir` to let it auto-detect a Steam install.
+```bat
+install.bat -GameDir "D:\Games\Pillars of Eternity"
+```
 
-That's it — no compiler, no .NET SDK, no runtime install. The bundled `install.ps1`:
-copies the prebuilt sidecar into the game, backs up `Assembly-CSharp.dll` once, and
-injects the hook using the bundled (MIT-licensed) `Mono.Cecil.dll`. It's safe to re-run
-(it detects an already-patched assembly and does nothing).
+(If you'd rather not use the `.bat`, you can run the PowerShell installer directly:
+`powershell -ExecutionPolicy Bypass -File .\install.ps1 -GameDir "<path>"`.)
 
 4. Launch the game, put a Cipher in the party, and look for the **Reaping Knives** modal on
    the action bar — it defaults to on.
