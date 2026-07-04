@@ -6,6 +6,7 @@
 // the namespace, and the injected call must all agree. It is internal-only and never
 // shown in-game; the mod itself is "Reaper Stance".
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace LoomReapingKnivesModal
@@ -41,6 +42,8 @@ namespace LoomReapingKnivesModal
                 {
                     return;
                 }
+
+                SoulWhipSuppressor.EnsureSpawned();
 
                 EnsureAssets();
                 if (s_realEffects == null || s_realEffects.Length == 0)
@@ -224,6 +227,153 @@ namespace LoomReapingKnivesModal
                     effect.ExtraObject = recipient;
                 }
             }
+        }
+    }
+
+    // Reaping Knives supplies its own forearm blade effects. When Soul Whip is also active,
+    // its glow stacks visually on the same character, so keep it hidden while the blades exist.
+    public class SoulWhipSuppressor : MonoBehaviour
+    {
+        private static SoulWhipSuppressor s_instance;
+        private readonly HashSet<GameObject> m_hidden = new HashSet<GameObject>();
+
+        public static void EnsureSpawned()
+        {
+            if (s_instance != null)
+            {
+                return;
+            }
+
+            try
+            {
+                GameObject go = new GameObject("LoomReaperStanceSoulWhipSuppressor");
+                UnityEngine.Object.DontDestroyOnLoad(go);
+                s_instance = go.AddComponent<SoulWhipSuppressor>();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("[LoomReapingKnivesModal] soul whip suppressor spawn failed: " + ex);
+            }
+        }
+
+        private void LateUpdate()
+        {
+            if (GameState.IsLoading || PartyMemberAI.PartyMembers == null || !GameState.InCombat)
+            {
+                RestoreHidden();
+                return;
+            }
+
+            try
+            {
+                for (int i = 0; i < PartyMemberAI.PartyMembers.Length; i++)
+                {
+                    PartyMemberAI pm = PartyMemberAI.PartyMembers[i];
+                    if (pm == null || pm.Secondary)
+                    {
+                        continue;
+                    }
+                    ProcessCharacter(pm.gameObject);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("[LoomReapingKnivesModal] soul whip suppressor process: " + ex);
+            }
+        }
+
+        private void ProcessCharacter(GameObject owner)
+        {
+            ParticleSystem[] systems = owner.GetComponentsInChildren<ParticleSystem>(true);
+            if (systems.Length == 0)
+            {
+                return;
+            }
+
+            bool bladesPresent = false;
+            for (int i = 0; i < systems.Length; i++)
+            {
+                if (AncestorContains(systems[i].transform, "reaping_knives"))
+                {
+                    bladesPresent = true;
+                    break;
+                }
+            }
+
+            if (!bladesPresent)
+            {
+                return;
+            }
+
+            for (int i = 0; i < systems.Length; i++)
+            {
+                ParticleSystem ps = systems[i];
+                if (!AncestorContains(ps.transform, "soul_whip"))
+                {
+                    continue;
+                }
+
+                Transform root = FindEffectRoot(ps.transform, "soul_whip");
+                if (root != null && root.gameObject.activeSelf)
+                {
+                    root.gameObject.SetActive(false);
+                    m_hidden.Add(root.gameObject);
+                }
+            }
+        }
+
+        private void RestoreHidden()
+        {
+            if (m_hidden.Count == 0)
+            {
+                return;
+            }
+
+            foreach (GameObject go in m_hidden)
+            {
+                if (go != null)
+                {
+                    go.SetActive(true);
+                }
+            }
+            m_hidden.Clear();
+        }
+
+        private static Transform FindEffectRoot(Transform t, string token)
+        {
+            Transform root = null;
+            Transform p = t;
+            int guard = 0;
+            while (p != null && guard < 16)
+            {
+                if (p.name.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    root = p;
+                }
+                else if (root != null)
+                {
+                    break;
+                }
+                p = p.parent;
+                guard++;
+            }
+            return root;
+        }
+
+        private static bool AncestorContains(Transform t, string token)
+        {
+            Transform p = t;
+            int guard = 0;
+            while (p != null && guard < 16)
+            {
+                if (p.name.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
+                p = p.parent;
+                guard++;
+            }
+            return false;
         }
     }
 }

@@ -8,6 +8,9 @@ Reaping Knives enchant — the spectral blades on the forearms, the summoned rea
 weapon, and party Focus generation on hit. When combat ends the visuals switch off and
 the toggle stays on, ready for the next fight.
 
+Reaper Stance also hides the Cipher's regular Soul Whip glow while the Reaping Knives
+blades are present, so the two weapon effects do not stack on top of each other visually.
+
 Unlike the vanilla ability (which a Cipher casts on a friendly target for a limited
 time and a Focus cost), Reaper Stance applies the effect to the Cipher themselves,
 permanently, for free.
@@ -51,7 +54,7 @@ Requires Pillars of Eternity 1 with **The White March Part II**.
 
 ### Option A — Quick install (no compiling) — recommended
 
-1. Download **`ReaperStance-v1.0.0.zip`** from the
+1. Download **`ReaperStance-v1.2.0.zip`** from the
    [Releases](https://github.com/countlessbats/reaper-stance/releases) page and extract it.
 2. **Close the game.**
 3. **Double-click `install.bat`** and approve the administrator prompt.
@@ -109,7 +112,8 @@ Verifying game files through Steam will also restore the original `Assembly-CSha
 ## Building from source
 
 - `src/ReaperStance.cs` — the sidecar. References `Assembly-CSharp.dll`,
-  `UnityEngine.dll`, `UnityEngine.CoreModule.dll` from `PillarsOfEternity_Data/Managed`.
+  `UnityEngine.dll`, `UnityEngine.CoreModule.dll`, and
+  `UnityEngine.ParticleSystemModule.dll` from `PillarsOfEternity_Data/Managed`.
 - `patcher/` — a `net8.0` console app using Mono.Cecil to inject the hook.
 
 See [build.ps1](build.ps1).
@@ -123,6 +127,11 @@ See [build.ps1](build.ps1).
 - Any mod that also rewrites `Assembly-CSharp.dll` should be applied in a known order;
   re-running this patcher on an already-patched assembly is a no-op.
 - Applies to every primary-party Cipher, including companions and the player.
+
+## Version notes
+
+- **v1.2.0**: Reaper Stance now always suppresses the regular Soul Whip glow while
+  Reaping Knives blades are active.
 
 ---
 

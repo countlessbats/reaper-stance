@@ -55,7 +55,8 @@ $outDll = Join-Path $managed 'LoomReapingKnivesModal.dll'
 $refs = @(
     'Assembly-CSharp.dll',
     'UnityEngine.dll',
-    'UnityEngine.CoreModule.dll'
+    'UnityEngine.CoreModule.dll',
+    'UnityEngine.ParticleSystemModule.dll'
 ) | ForEach-Object { "/reference:`"$(Join-Path $managed $_)`"" }
 
 Write-Host "Compiler : $Csc"
