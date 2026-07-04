@@ -44,6 +44,7 @@ namespace LoomReapingKnivesModal
                 }
 
                 SoulWhipSuppressor.EnsureSpawned();
+                LoomColorfulReapingKnives.ReaperFx.EnsureSpawned();
 
                 EnsureAssets();
                 if (s_realEffects == null || s_realEffects.Length == 0)

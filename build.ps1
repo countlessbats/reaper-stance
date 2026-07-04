@@ -3,7 +3,7 @@
     Builds the Reaper Stance sidecar assembly and installs it into the game's Managed folder.
 
 .DESCRIPTION
-    Compiles src/ReaperStance.cs into LoomReapingKnivesModal.dll and copies it to
+    Compiles src/*.cs into LoomReapingKnivesModal.dll and copies it to
     <GameDir>/PillarsOfEternity_Data/Managed/. The internal DLL name is intentionally
     LoomReapingKnivesModal.dll to match the injected hook (see README).
 
@@ -15,6 +15,9 @@
     Optional path to the Roslyn C# compiler (csc.exe). If omitted, common Build Tools /
     Visual Studio locations are probed, then PATH.
 
+.PARAMETER OutputDir
+    Optional output folder. Defaults to the game's Managed folder.
+
 .EXAMPLE
     ./build.ps1 -GameDir "E:\SteamLibrary\steamapps\common\Pillars of Eternity"
 #>
@@ -22,6 +25,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$GameDir,
+
+    [string]$OutputDir,
 
     [string]$Csc
 )
@@ -49,26 +54,37 @@ if (-not $Csc -or -not (Test-Path $Csc)) {
     throw "Could not locate csc.exe. Pass it explicitly with -Csc."
 }
 
-$src    = Join-Path $PSScriptRoot 'src\ReaperStance.cs'
-$outDll = Join-Path $managed 'LoomReapingKnivesModal.dll'
+$srcDir = Join-Path $PSScriptRoot 'src'
+$src    = Get-ChildItem -LiteralPath $srcDir -Filter '*.cs' | Sort-Object Name
+if (-not $src) {
+    throw "No C# source files found in $srcDir."
+}
+if (-not $OutputDir) { $OutputDir = $managed }
+New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+
+$outDll = Join-Path $OutputDir 'LoomReapingKnivesModal.dll'
+
+Write-Host "Compiler : $Csc"
+Write-Host "Sources  :"
+$src | ForEach-Object { Write-Host "  $($_.FullName)" }
+Write-Host "Output   : $outDll"
 
 $refs = @(
     'Assembly-CSharp.dll',
     'UnityEngine.dll',
     'UnityEngine.CoreModule.dll',
-    'UnityEngine.ParticleSystemModule.dll'
-) | ForEach-Object { "/reference:`"$(Join-Path $managed $_)`"" }
+    'UnityEngine.ParticleSystemModule.dll',
+    'UnityEngine.IMGUIModule.dll',
+    'UnityEngine.InputLegacyModule.dll',
+    'UnityEngine.TextRenderingModule.dll'
+) | ForEach-Object { "/reference:$(Join-Path $managed $_)" }
 
-Write-Host "Compiler : $Csc"
-Write-Host "Source   : $src"
-Write-Host "Output   : $outDll"
-
-$argList = @('/nologo', '/target:library', "/out:`"$outDll`"") + $refs + @("`"$src`"")
+$argList = @('/nologo', '/target:library', "/out:$outDll") + $refs + ($src | ForEach-Object { $_.FullName })
 & $Csc @argList
 if ($LASTEXITCODE -ne 0) {
     throw "Compilation failed ($LASTEXITCODE)."
 }
 
-Write-Host "`nBuilt and installed LoomReapingKnivesModal.dll." -ForegroundColor Green
+Write-Host "`nBuilt LoomReapingKnivesModal.dll." -ForegroundColor Green
 Write-Host "If this is a first install, run the patcher in patcher/ (see README)." -ForegroundColor Yellow
 Write-Host "Restart the game to load the new build." -ForegroundColor Yellow
