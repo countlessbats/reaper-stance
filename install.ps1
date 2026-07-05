@@ -28,33 +28,127 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$GameDir
+    [string]$GameDir,
+
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$RemainingArgs
 )
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-function Find-GameDir {
-    $guesses = @(
+function Normalize-PathInput([string]$path) {
+    if ([string]::IsNullOrWhiteSpace($path)) {
+        return $null
+    }
+
+    $p = $path.Trim()
+    if ($p.Length -ge 2 -and (($p.StartsWith('"') -and $p.EndsWith('"')) -or ($p.StartsWith("'") -and $p.EndsWith("'")))) {
+        $p = $p.Substring(1, $p.Length - 2).Trim()
+    }
+
+    return [Environment]::ExpandEnvironmentVariables($p)
+}
+
+function Get-SteamRoots {
+    $roots = New-Object System.Collections.Generic.List[string]
+
+    foreach ($regPath in @(
+        'HKCU:\Software\Valve\Steam',
+        'HKLM:\SOFTWARE\WOW6432Node\Valve\Steam',
+        'HKLM:\SOFTWARE\Valve\Steam'
+    )) {
+        try {
+            $props = Get-ItemProperty -LiteralPath $regPath -ErrorAction Stop
+            foreach ($name in @('SteamPath', 'InstallPath')) {
+                $value = Normalize-PathInput $props.$name
+                if ($value -and (Test-Path -LiteralPath $value)) {
+                    $roots.Add($value)
+                }
+            }
+        } catch {
+            # Registry lookup is best-effort; portable Steam installs may not have these keys.
+        }
+    }
+
+    foreach ($root in @($roots.ToArray())) {
+        $vdf = Join-Path $root 'steamapps\libraryfolders.vdf'
+        if (-not (Test-Path -LiteralPath $vdf)) {
+            continue
+        }
+
+        try {
+            foreach ($line in Get-Content -LiteralPath $vdf) {
+                if ($line -match '"path"\s+"([^"]+)"') {
+                    $library = ($Matches[1] -replace '\\\\', '\')
+                    if ($library -and (Test-Path -LiteralPath $library)) {
+                        $roots.Add($library)
+                    }
+                }
+            }
+        } catch {
+            # A malformed or locked VDF should not prevent prompting.
+        }
+    }
+
+    return $roots.ToArray() | Where-Object { $_ } | Select-Object -Unique
+}
+
+function Get-CandidateGameDirs {
+    $guesses = New-Object System.Collections.Generic.List[string]
+
+    foreach ($root in Get-SteamRoots) {
+        $guesses.Add((Join-Path $root 'steamapps\common\Pillars of Eternity'))
+    }
+
+    foreach ($g in @(
         'C:\Program Files (x86)\Steam\steamapps\common\Pillars of Eternity',
         'C:\Program Files\Steam\steamapps\common\Pillars of Eternity',
         'D:\SteamLibrary\steamapps\common\Pillars of Eternity',
         'E:\SteamLibrary\steamapps\common\Pillars of Eternity'
-    )
-    foreach ($g in $guesses) {
+    )) {
+        $guesses.Add($g)
+    }
+
+    return $guesses.ToArray() | Where-Object { $_ } | Select-Object -Unique
+}
+
+function Find-GameDir {
+    foreach ($g in Get-CandidateGameDirs) {
         if (Test-Path (Join-Path $g 'PillarsOfEternity_Data\Managed\Assembly-CSharp.dll')) { return $g }
     }
     return $null
 }
 
 function Test-GameDir([string]$dir) {
-    return $dir -and (Test-Path (Join-Path $dir 'PillarsOfEternity_Data\Managed\Assembly-CSharp.dll'))
+    if ([string]::IsNullOrWhiteSpace($dir)) {
+        return $false
+    }
+    return Test-Path -LiteralPath (Join-Path $dir 'PillarsOfEternity_Data\Managed\Assembly-CSharp.dll')
 }
 
-# Be forgiving if the user points a bit too deep (e.g. at PillarsOfEternity_Data or Managed):
-# walk up until we reach the folder that actually contains the game assembly.
+# Be forgiving if the user points at the game folder, the exe, PillarsOfEternity_Data,
+# Managed, or Assembly-CSharp.dll. Walk upward until we reach the game root.
 function Resolve-GameDir([string]$dir) {
-    $try = $dir
+    $try = Normalize-PathInput $dir
+    if ([string]::IsNullOrWhiteSpace($try)) {
+        return $dir
+    }
+
+    try {
+        $leaf = Split-Path -Leaf $try
+        if ($leaf -ieq 'Assembly-CSharp.dll' -or $leaf -ieq 'PillarsOfEternity.exe') {
+            $try = Split-Path -Parent $try
+        }
+        if (Test-Path -LiteralPath $try) {
+            $try = (Get-Item -LiteralPath $try).FullName
+        } else {
+            $try = [System.IO.Path]::GetFullPath($try)
+        }
+    } catch {
+        return $dir
+    }
+
     while ($try -and -not (Test-GameDir $try)) {
         $parent = Split-Path $try -Parent
         if ([string]::IsNullOrEmpty($parent) -or $parent -eq $try) { break }
@@ -65,21 +159,29 @@ function Resolve-GameDir([string]$dir) {
 }
 
 # Resolve the game directory: explicit -GameDir, then auto-detect, then prompt the user.
-if ($GameDir) { $GameDir = Resolve-GameDir ($GameDir.Trim().Trim('"')) }
+if ($RemainingArgs -and $RemainingArgs.Count -gt 0) {
+    # If someone typed an unquoted path with spaces after -GameDir, PowerShell may hand us
+    # the split-off pieces here. Rejoin them and let Resolve-GameDir validate the result.
+    $GameDir = (($GameDir, $RemainingArgs) | Where-Object { $_ }) -join ' '
+}
+if ($GameDir) { $GameDir = Resolve-GameDir $GameDir }
 if (-not (Test-GameDir $GameDir)) {
     $auto = Find-GameDir
     if (Test-GameDir $auto) { $GameDir = $auto }
 }
 if (-not (Test-GameDir $GameDir)) {
     Write-Host "Could not find your Pillars of Eternity installation automatically." -ForegroundColor Yellow
-    Write-Host "It's the folder that contains 'PillarsOfEternity_Data'" -ForegroundColor DarkGray
-    Write-Host "(for example: ...\steamapps\common\Pillars of Eternity)." -ForegroundColor DarkGray
+    Write-Host "Paste the folder that contains 'PillarsOfEternity.exe' or 'PillarsOfEternity_Data'." -ForegroundColor DarkGray
+    Write-Host "You can also paste a path to PillarsOfEternity.exe, PillarsOfEternity_Data, Managed, or Assembly-CSharp.dll." -ForegroundColor DarkGray
+    Write-Host "Quotes are optional here; paths with spaces and parentheses are OK." -ForegroundColor DarkGray
+    Write-Host "Example: C:\Program Files (x86)\Steam\steamapps\common\Pillars of Eternity" -ForegroundColor DarkGray
     for ($attempt = 1; $attempt -le 5; $attempt++) {
-        $entry = Read-Host "Enter the path to your Pillars of Eternity folder (leave blank to cancel)"
+        $entry = Read-Host "Pillars of Eternity install path (leave blank to cancel)"
         if ([string]::IsNullOrWhiteSpace($entry)) { throw "Installation cancelled." }
-        $candidate = Resolve-GameDir ($entry.Trim().Trim('"'))
+        $candidate = Resolve-GameDir $entry
         if (Test-GameDir $candidate) { $GameDir = $candidate; break }
-        Write-Host "That folder doesn't contain PillarsOfEternity_Data\Managed\Assembly-CSharp.dll. Try again." -ForegroundColor Yellow
+        Write-Host "I could not find PillarsOfEternity_Data\Managed\Assembly-CSharp.dll from that path." -ForegroundColor Yellow
+        Write-Host "Try the main game folder, not the release zip folder. For Steam, it usually ends in '\steamapps\common\Pillars of Eternity'." -ForegroundColor DarkGray
     }
     if (-not (Test-GameDir $GameDir)) { throw "Could not locate the game after several attempts." }
 }

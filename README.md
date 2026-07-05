@@ -57,17 +57,20 @@ Requires Pillars of Eternity 1 with **The White March Part II**.
 
 ### Option A — Quick install (no compiling) — recommended
 
-1. Download **`ReaperStance-v1.3.0.zip`** from the
+1. Download **`ReaperStance-v1.3.1.zip`** from the
    [Releases](https://github.com/countlessbats/reaper-stance/releases) page and extract it.
 2. **Close the game.**
 3. **Double-click `install.bat`** and approve the administrator prompt.
 
-That's it — no compiler, no .NET SDK, no runtime install, no typing. `install.bat` just runs
+That's it — no compiler, no .NET SDK, no runtime install. `install.bat` just runs
 the bundled `install.ps1`, which copies the prebuilt sidecar into the game, backs up
 `Assembly-CSharp.dll` once, and injects the hook using the bundled (MIT-licensed)
 `Mono.Cecil.dll`. It's safe to re-run (it detects an already-patched assembly and does
-nothing). It auto-detects a Steam install; if your game is elsewhere, run it from a command
-prompt with a path instead:
+nothing). It auto-detects Steam library folders when it can. If it cannot find your install,
+it prompts for the location; you can paste the game folder, `PillarsOfEternity.exe`,
+`PillarsOfEternity_Data`, `Managed`, or `Assembly-CSharp.dll`, with or without quotes.
+
+If you prefer to pass the path up front, run:
 
 ```bat
 install.bat -GameDir "D:\Games\Pillars of Eternity"
@@ -136,6 +139,9 @@ See [build.ps1](build.ps1).
 
 ## Version notes
 
+- **v1.3.1**: Installer now detects Steam library folders more broadly and gives a more helpful
+  path prompt when auto-detection fails. Pasted paths can point at the game folder, exe,
+  `PillarsOfEternity_Data`, `Managed`, or `Assembly-CSharp.dll`, with or without quotes.
 - **v1.3.0**: Bundles Colorful Reaping Knives directly into Reaper Stance. F9 opens the
   recolor overlay; Advanced mode exposes the individual blade layer opacities/colors.
 - **v1.2.0**: Reaper Stance now always suppresses the regular Soul Whip glow while
